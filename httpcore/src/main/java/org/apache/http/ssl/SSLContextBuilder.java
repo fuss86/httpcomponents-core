@@ -27,6 +27,16 @@
 
 package org.apache.http.ssl;
 
+import org.apache.http.util.Args;
+
+import javax.net.ssl.KeyManager;
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509ExtendedKeyManager;
+import javax.net.ssl.X509TrustManager;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -50,17 +60,6 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
-
-import javax.net.ssl.KeyManager;
-import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLEngine;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.TrustManagerFactory;
-import javax.net.ssl.X509ExtendedKeyManager;
-import javax.net.ssl.X509TrustManager;
-
-import org.apache.http.util.Args;
 
 /**
  * Builder for {@link javax.net.ssl.SSLContext} instances.
@@ -93,11 +92,17 @@ public class SSLContextBuilder {
         return new SSLContextBuilder();
     }
 
+    public static ReloadableSSLContextBuilder reloadable() {
+        return new ReloadableSSLContextBuilder();
+    }
+
     public SSLContextBuilder() {
         super();
         this.keyManagers = new LinkedHashSet<KeyManager>();
         this.trustManagers = new LinkedHashSet<TrustManager>();
     }
+
+
 
     /**
      * Sets the SSLContext protocol algorithm name.
@@ -521,6 +526,121 @@ public class SSLContextBuilder {
                 + ", keyManagerFactoryAlgorithm=" + keyManagerFactoryAlgorithm + ", keyManagers=" + keyManagers
                 + ", trustManagerFactoryAlgorithm=" + trustManagerFactoryAlgorithm + ", trustManagers=" + trustManagers
                 + ", secureRandom=" + secureRandom + "]";
+    }
+
+    public static class ReloadableSSLContextBuilder extends SSLContextBuilder {
+
+        private TrustMaterial trustMaterial;
+
+        private KeyMaterial keyMaterial;
+
+        @Override
+        public SSLContextBuilder loadTrustMaterial(File file, char[] storePassword, TrustStrategy trustStrategy) throws NoSuchAlgorithmException, KeyStoreException, CertificateException, IOException {
+            this.trustMaterial = new TrustMaterial(file, storePassword, trustStrategy);
+            return super.loadTrustMaterial(file, storePassword, trustStrategy);
+        }
+
+        @Override
+        public SSLContextBuilder loadTrustMaterial(URL url, char[] storePassword, TrustStrategy trustStrategy) throws NoSuchAlgorithmException, KeyStoreException, CertificateException, IOException {
+            this.trustMaterial = new TrustMaterial(url, storePassword, trustStrategy);
+            return super.loadTrustMaterial(url, storePassword, trustStrategy);
+        }
+
+        @Override
+        public SSLContextBuilder loadKeyMaterial(File file, char[] storePassword, char[] keyPassword, PrivateKeyStrategy aliasStrategy) throws NoSuchAlgorithmException, KeyStoreException, UnrecoverableKeyException, CertificateException, IOException {
+            this.keyMaterial = new KeyMaterial(file, storePassword, keyPassword, aliasStrategy);
+            return super.loadKeyMaterial(file, storePassword, keyPassword, aliasStrategy);
+        }
+
+        @Override
+        public SSLContextBuilder loadKeyMaterial(URL url, char[] storePassword, char[] keyPassword, PrivateKeyStrategy aliasStrategy) throws NoSuchAlgorithmException, KeyStoreException, UnrecoverableKeyException, CertificateException, IOException {
+            this.keyMaterial = new KeyMaterial(url, storePassword, keyPassword, aliasStrategy);
+            return super.loadKeyMaterial(url, storePassword, keyPassword, aliasStrategy);
+        }
+
+        public SSLContext reload() throws CertificateException, NoSuchAlgorithmException, KeyStoreException, IOException, UnrecoverableKeyException, KeyManagementException {
+            reloadTrustMaterialIfPossible();
+            reloadKeyMaterialIfPossible();
+            return super.build();
+        }
+
+        private void reloadTrustMaterialIfPossible() throws NoSuchAlgorithmException, KeyStoreException, CertificateException, IOException {
+            if (trustMaterial != null) {
+                if (trustMaterial.file != null) {
+                    super.loadTrustMaterial(trustMaterial.file, trustMaterial.storePassword, trustMaterial.trustStrategy);
+                } else if (trustMaterial.url != null) {
+                    super.loadTrustMaterial(trustMaterial.url, trustMaterial.storePassword, trustMaterial.trustStrategy);
+                } else {
+                    throw new IllegalStateException("TrustMaterial should have either `file` or `url` provided");
+                }
+            }
+        }
+
+        private void reloadKeyMaterialIfPossible() throws UnrecoverableKeyException, CertificateException, NoSuchAlgorithmException, KeyStoreException, IOException {
+            if (keyMaterial != null) {
+                if (keyMaterial.file != null) {
+                    super.loadKeyMaterial(keyMaterial.file, keyMaterial.storePassword, keyMaterial.keyPassword, keyMaterial.aliasStrategy);
+                } else if (keyMaterial.url != null) {
+                    super.loadKeyMaterial(keyMaterial.url, keyMaterial.storePassword, keyMaterial.keyPassword, keyMaterial.aliasStrategy);
+                } else {
+                    throw new IllegalStateException("KeyMaterial should have either `file` or `url` provided");
+                }
+            }
+        }
+
+        private class TrustMaterial {
+
+            private final File file;
+
+            private final URL url;
+
+            private final char[] storePassword;
+
+            private final TrustStrategy trustStrategy;
+
+            private TrustMaterial(File file, char[] storePassword, TrustStrategy trustStrategy) {
+                this.file = file;
+                this.url = null;
+                this.storePassword = storePassword;
+                this.trustStrategy = trustStrategy;
+            }
+
+            private TrustMaterial(URL url, char[] storePassword, TrustStrategy trustStrategy) {
+                this.file = null;
+                this.url = url;
+                this.storePassword = storePassword;
+                this.trustStrategy = trustStrategy;
+            }
+        }
+
+        private class KeyMaterial {
+
+            private final File file;
+
+            private final URL url;
+
+            private final char[] storePassword;
+
+            private final char[] keyPassword;
+
+            private final PrivateKeyStrategy aliasStrategy;
+
+            private KeyMaterial(File file, char[] storePassword, char[] keyPassword, PrivateKeyStrategy aliasStrategy) {
+                this.file = file;
+                this.url = null;
+                this.storePassword = storePassword;
+                this.keyPassword = keyPassword;
+                this.aliasStrategy = aliasStrategy;
+            }
+
+            private KeyMaterial(URL url, char[] storePassword, char[] keyPassword, PrivateKeyStrategy aliasStrategy) {
+                this.file = null;
+                this.url = url;
+                this.storePassword = storePassword;
+                this.keyPassword = keyPassword;
+                this.aliasStrategy = aliasStrategy;
+            }
+        }
     }
 
 }

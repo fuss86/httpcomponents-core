@@ -27,6 +27,22 @@
 
 package org.apache.http.ssl;
 
+import org.junit.After;
+import org.junit.Assert;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
+
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLException;
+import javax.net.ssl.SSLHandshakeException;
+import javax.net.ssl.SSLPeerUnverifiedException;
+import javax.net.ssl.SSLServerSocket;
+import javax.net.ssl.SSLSession;
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.SSLSocketFactory;
+import javax.net.ssl.TrustManagerFactory;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -52,23 +68,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-
-import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLException;
-import javax.net.ssl.SSLHandshakeException;
-import javax.net.ssl.SSLPeerUnverifiedException;
-import javax.net.ssl.SSLServerSocket;
-import javax.net.ssl.SSLSession;
-import javax.net.ssl.SSLSocket;
-import javax.net.ssl.SSLSocketFactory;
-import javax.net.ssl.TrustManagerFactory;
-
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 /**
  * Unit tests for {@link org.apache.http.ssl.SSLContextBuilder}.
@@ -744,6 +743,25 @@ public class TestSSLContextBuilder {
                 .loadKeyMaterial(resource1, storePassword.toCharArray(), keyPassword.toCharArray())
                 .build();
         Assert.assertEquals(PROVIDER_SUN_JSSE,  sslContext.getProvider().getName());
+    }
+
+    @Test
+    public void testBuildWithProviderName2() throws Exception {
+        final URL resource1 = getResource("/test-reloadable-keystore.p12");
+        final String storePassword = "nopassword";
+        final String keyPassword = "nopassword";
+
+        SSLContextBuilder.ReloadableSSLContextBuilder reloadable = SSLContextBuilder.reloadable();
+        reloadable.loadKeyMaterial(resource1, storePassword.toCharArray(), keyPassword.toCharArray());
+        final SSLContext sslContext = reloadable.build();
+
+        // TODO change test-reloadable-keystore.p12
+
+        SSLContext reloaded = reloadable.reload();
+
+        // TODO assert reloaded and sslContext do not work the same way
+
+        // TODO rollback test-reloadable-keystore.p12
     }
 
 }
