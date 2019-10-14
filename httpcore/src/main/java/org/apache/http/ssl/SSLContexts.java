@@ -84,4 +84,13 @@ public class SSLContexts {
         return SSLContextBuilder.create();
     }
 
+    /**
+     * Creates custom SSL context.
+     *
+     * @return default system SSL context
+     */
+    public static SSLContextBuilder reloadable() {
+        return SSLContextBuilder.reloadable();
+    }
+
 }
